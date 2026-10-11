@@ -1,8 +1,8 @@
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
-local Players   = game:GetService("Players")
+local Players  = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
-local player    = Players.LocalPlayer
+local player   = Players.LocalPlayer
 
 local Window = Rayfield:CreateWindow({
     Name = "Candy Corn Farm",
@@ -40,37 +40,9 @@ local function resetCharacter()
 end
 
 -- ========================
--- Check other players on PartyPad
+-- Teleport to PartyPad
 -- ========================
-local function isSomeoneOnPartyPad(pad)
-    local target = pad:IsA("BasePart") and pad
-        or pad:FindFirstChildWhichIsA("BasePart")
-        or pad.PrimaryPart
-    
-    if not target then return false end
-
-    -- ตรวจสอบผู้เล่นทั้งหมดในเกมว่ามีใครอยู่ใกล้ PartPad2 ในระยะ 5 Studs (และไม่ใช่ตัวเราเอง)
-    for _, otherPlayer in ipairs(Players:GetPlayers()) do
-        if otherPlayer ~= player then
-            local char = otherPlayer.Character
-            local otherHrp = char and char:FindFirstChild("HumanoidRootPart")
-            local humanoid = char and char:FindFirstChildOfClass("Humanoid")
-            
-            if otherHrp and humanoid and humanoid.Health > 0 then
-                local distance = (otherHrp.Position - target.Position).Magnitude
-                if distance <= 5 then -- ปรับระยะความใกล้ได้ตามต้องการ (หน่วยเป็น Studs)
-                    return true
-                end
-            end
-        end
-    end
-    return false
-end
-
--- ========================
--- Teleport to PartyPad (with Wait)
--- ========================
-local function waitForPartyPadAndTeleport(stopCheck)
+local function teleportToPartyPad()
     local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
     if not hrp then return false end
 
@@ -90,23 +62,12 @@ local function waitForPartyPadAndTeleport(stopCheck)
         return false
     end
 
-    -- วนลูปเช็คว่ามีคนอื่นอยู่มั้ย ถ้ามีให้รอจนกว่าจะว่าง
-    while isSomeoneOnPartyPad(pad) do
-        statusLabel:Set("Status: PartyPad has other player, waiting...")
-        if stopCheck and stopCheck() then return false end
-        task.wait(2)
-    end
-
     hrp.CFrame = CFrame.new(target.Position + Vector3.new(0, 4, 0))
     statusLabel:Set("Status: Teleported to PartPad2")
     return true
 end
 
 local function farmOnce(stopCheck)
-    -- ก่อนเริ่มฟาร์ม ให้เช็คและรอ PartyPad ว่างก่อน
-    local success = waitForPartyPadAndTeleport(stopCheck)
-    if not success then return end
-
     local character = player.Character or player.CharacterAdded:Wait()
     local hrp       = character:WaitForChild("HumanoidRootPart")
     local humanoid  = character:WaitForChild("Humanoid")
@@ -173,13 +134,15 @@ MainTab:CreateToggle({
     end,
 })
 
+-- Teleport button (ใหม่)
 MainTab:CreateButton({
     Name = "Teleport to PartPad2",
     Callback = function()
-        task.spawn(function() waitForPartyPadAndTeleport(nil) end)
+        teleportToPartyPad()
     end,
 })
 
+-- Auto Teleport toggle (ใหม่)
 local autoTpOn = false
 MainTab:CreateToggle({
     Name = "Auto Teleport to PartPad2 (loop)",
@@ -190,7 +153,7 @@ MainTab:CreateToggle({
         if Value then
             task.spawn(function()
                 while autoTpOn do
-                    waitForPartyPadAndTeleport(function() return not autoTpOn end)
+                    teleportToPartyPad()
                     task.wait(2)
                 end
                 statusLabel:Set("Status: Auto TP stopped")
