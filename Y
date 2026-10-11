@@ -1,0 +1,165 @@
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Players  = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local player   = Players.LocalPlayer
+
+local Window = Rayfield:CreateWindow({
+    Name = "Candy Corn Farm",
+    LoadingTitle = "Candy Corn Farm",
+    LoadingSubtitle = "by Divinex",
+    ConfigurationSaving = { Enabled = true, FolderName = "CandyCornFarm", FileName = "Config" },
+    KeySystem = false,
+})
+
+local MainTab = Window:CreateTab("Main", 4483362458)
+
+local autoFarmOn = false
+local statusLabel = MainTab:CreateLabel("Status: Idle")
+
+local function hasCandyCorn(folder)
+    for _, child in ipairs(folder:GetChildren()) do
+        if child.Name == "CandyCorn" then return true end
+    end
+    return false
+end
+
+local function resetCharacter()
+    local character = player.Character
+    local hrp = character and character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    local pos = hrp.Position
+    pcall(function() hrp.CFrame = CFrame.new(pos.X, -500, pos.Z) end)
+    task.delay(2, function()
+        local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+        if hum and hum.Health > 0 then
+            pcall(function() hum.Health = 0 end)
+            pcall(function() hum:ChangeState(Enum.HumanoidStateType.Dead) end)
+        end
+    end)
+end
+
+-- ========================
+-- Teleport to PartyPad
+-- ========================
+local function teleportToPartyPad()
+    local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return false end
+
+    local ok, pad = pcall(function()
+        return Workspace.PartyPads.PartPad2
+    end)
+    if not ok or not pad then
+        statusLabel:Set("Status: PartyPads.PartPad2 not found!")
+        return false
+    end
+
+    local target = pad:IsA("BasePart") and pad
+        or pad:FindFirstChildWhichIsA("BasePart")
+        or pad.PrimaryPart
+    if not target then
+        statusLabel:Set("Status: No BasePart in PartPad2!")
+        return false
+    end
+
+    hrp.CFrame = CFrame.new(target.Position + Vector3.new(0, 4, 0))
+    statusLabel:Set("Status: Teleported to PartPad2")
+    return true
+end
+
+local function farmOnce(stopCheck)
+    local character = player.Character or player.CharacterAdded:Wait()
+    local hrp       = character:WaitForChild("HumanoidRootPart")
+    local humanoid  = character:WaitForChild("Humanoid")
+    local drops     = Workspace:WaitForChild("CandyCornDrops")
+
+    statusLabel:Set("Status: Scanning for CandyCorn...")
+
+    while hasCandyCorn(drops) do
+        local foundAny = false
+        for _, child in ipairs(drops:GetChildren()) do
+            if child.Name == "CandyCorn" then
+                foundAny = true
+                local targetPart = child:IsA("Model")
+                    and (child.PrimaryPart or child:FindFirstChildWhichIsA("BasePart"))
+                    or (child:IsA("BasePart") and child)
+
+                if targetPart then
+                    hrp.CFrame = targetPart.CFrame + Vector3.new(0, 3, 0)
+                    statusLabel:Set("Status: Going to " .. child.Name)
+                    humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+                    task.wait(3)
+                end
+
+                if stopCheck and stopCheck() then
+                    statusLabel:Set("Status: Stopped")
+                    return
+                end
+            end
+        end
+        if not foundAny then break end
+        if stopCheck and stopCheck() then statusLabel:Set("Status: Stopped") return end
+    end
+
+    statusLabel:Set("Status: Collected all — resetting...")
+    resetCharacter()
+end
+
+-- ========================
+-- UI Buttons
+-- ========================
+MainTab:CreateButton({
+    Name = "Run Once",
+    Callback = function()
+        task.spawn(function() farmOnce(nil) end)
+    end,
+})
+
+MainTab:CreateToggle({
+    Name = "Auto Farm (loop)",
+    CurrentValue = false,
+    Flag = "AutoFarmCandyCorn",
+    Callback = function(Value)
+        autoFarmOn = Value
+        if Value then
+            task.spawn(function()
+                while autoFarmOn do
+                    farmOnce(function() return not autoFarmOn end)
+                    if not autoFarmOn then break end
+                    task.wait(5)
+                end
+                statusLabel:Set("Status: Idle")
+            end)
+        end
+    end,
+})
+
+-- Teleport button (ใหม่)
+MainTab:CreateButton({
+    Name = "Teleport to PartPad2",
+    Callback = function()
+        teleportToPartyPad()
+    end,
+})
+
+-- Auto Teleport toggle (ใหม่)
+local autoTpOn = false
+MainTab:CreateToggle({
+    Name = "Auto Teleport to PartPad2 (loop)",
+    CurrentValue = false,
+    Flag = "AutoTpPartPad2",
+    Callback = function(Value)
+        autoTpOn = Value
+        if Value then
+            task.spawn(function()
+                while autoTpOn do
+                    teleportToPartyPad()
+                    task.wait(2)
+                end
+                statusLabel:Set("Status: Auto TP stopped")
+            end)
+        end
+    end,
+})
+
+Rayfield:LoadConfiguration()
